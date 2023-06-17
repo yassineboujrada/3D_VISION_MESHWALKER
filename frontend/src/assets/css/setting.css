@@ -1,0 +1,45 @@
+.setting-holder{
+    width: 100%;
+    height: 85%;
+}
+.setting-bio{
+    width: 100%;
+    height: 10%;
+    margin-left: 7rem;
+}
+.setting-form{
+    width: 100%;
+    height: 60%;
+    display: flex;
+    justify-content: space-evenly;
+    align-items: center;
+    flex-direction: column;
+}
+.setting-form form{
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: space-evenly;
+    align-items: center;
+    flex-direction: column;
+}
+.form-input{
+    width: 20vw;
+    height: 2rem;
+    border-radius: 5px;
+    border: 1px solid #787976;
+    padding-left: 1rem;
+    margin-bottom: 1rem;
+}
+.btn-sub{
+    display: block;
+    width: 25%;
+    font-size: 16px;
+    font-weight: bold;
+    padding: 10px;
+    border: none;
+    border-radius: 5px;
+    background-color: var(--color-primary);
+    color: #fff;
+    cursor: pointer;
+}
