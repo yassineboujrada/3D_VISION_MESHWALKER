@@ -10,12 +10,12 @@ import dataset
 from tqdm import tqdm
 
 #####################   loading model   #####################
-with open('./runs/params.txt') as fp:
+with open('./0010-15.11.2020..05.25__human_seg/params.txt') as fp:
     params = EasyDict(json.load(fp))
 
-model_fn = './runs/model_mesh.keras'
+model_fn = './0010-15.11.2020..05.25__human_seg/learned_model.keras'
 
-params.model_fn = "./runs/model_mesh.keras"
+params.model_fn = "./0010-15.11.2020..05.25__human_seg/learned_model.keras"
 params.new_run = 0
 params.mix_models_in_minibatch = False
 params.batch_size = 1
@@ -26,8 +26,9 @@ params.net_input_dim = 4
 model = rnn_model.RnnWalkNet(params, params.n_classes, params.net_input_dim-1 , model_fn, model_must_be_load=True,
                                        dump_model_visualization=False)
 
-model.load_weights('./runs/model_mesh.keras')
+model.load_weights('./0010-15.11.2020..05.25__human_seg/learned_model.keras')
 
+print(model.summary())
 ###################  prediction ###################
 # dataset_expansion = params.datasets2use['test'][0]
 # min_max_faces2use = params.test_min_max_faces2use[0]

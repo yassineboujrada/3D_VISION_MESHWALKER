@@ -1,13 +1,10 @@
-import os, copy, json, sys
+import os, copy, json
 from easydict import EasyDict
 from tqdm import tqdm
-
 import scipy
 import numpy as np
 import trimesh
-
 import tensorflow as tf
-
 import rnn_model
 import dataset
 import dataset_prepare
@@ -77,8 +74,6 @@ def calc_final_accuracy(models, print_details=False):
     best_pred = np.argmax(model['pred'], axis=-1)
     model['v_pred'] = best_pred
     pred_score = scipy.special.softmax(model['pred'], axis=1)
-    # Calc edges accuracy
-    # if 'edges_meshcnn' in model.keys(): # pred per edge
     g = 0
     gn = 0
     for fi, face in enumerate(model['faces']):
@@ -87,7 +82,6 @@ def calc_final_accuracy(models, print_details=False):
       v2_pred = best_pred[face[2]]
       prediction_per_vertice = [(face[0], v0_pred), (face[1], v1_pred), (face[2], v2_pred)]
       all_predictions = [v0_pred, v1_pred, v2_pred]
-      # print("prediction_per_vertice",prediction_per_vertice)
       if len(set(all_predictions)) == 3:
           segmentation__[fi] = int(sorted(prediction_per_vertice, key = lambda x : pred_score[x[0], x[1]], reverse = True)[0][1])
           segmentation.append(int(sorted(prediction_per_vertice, key = lambda x : pred_score[x[0], x[1]], reverse = True)[0][1]))
@@ -119,24 +113,18 @@ def calc_final_accuracy(models, print_details=False):
     # Calc vertices accuracy
     if 'area_vertices' not in model.keys():
       dataset_prepare.calc_mesh_area(model)
-    # print("model['labels']",model['labels'],"\n",best_pred,"\n")
-    # this_accuracy = (best_pred == model['labels']).sum() / model['labels'].shape[0]
-    # norm_accuracy = np.sum((best_pred == model['labels']) * model['area_vertices']) / model['area_vertices'].sum()
-    # vertices_accuracy.append(this_accuracy)
-    # vertices_norm_acc.append(norm_accuracy)
 
-  # if len(edges_accuracy) == 0:
-  #   edges_accuracy = [0]
-  with open('segmentation.json', 'w+') as f:
-    json.dump(segmentation__, f, indent=4)
-  print("hi ",model['v_pred'])
-  print("hi2",segmentation__)
-  return np.mean([1,2,3,4]), np.mean([5,4,6,3]), np.nan,segmentation__
+  # with open('segmentation.json', 'w+') as f:
+  #   json.dump(segmentation__, f, indent=4)
+
+  return segmentation__
 
 
+# this function is used to postprocess the vertex predictions 
+# by averaging the vertices with their neighbors
 def postprocess_vertex_predictions(models):
   # Averaging vertices with thir neighbors, to get best prediction (eg.5 in the paper)
-  for model_name, model in models.items():
+  for _, model in models.items():
     pred_orig = model['pred'].copy()
     av_pred = np.zeros_like(pred_orig)
     for v in range(model['vertices'].shape[0]):
@@ -152,6 +140,7 @@ def postprocess_vertex_predictions(models):
     model['pred'] = av_pred
 
 
+# this function used to calculate the accuracy of the model on the test set
 def calc_accuracy_test(logdir=None, dataset_expansion=None, dnn_model=None, params=None,
                        n_iters=32, model_fn=None, n_walks_per_model=32, data_augmentation={}, file_path=None):
   # Prepare parameters for the evaluation
@@ -193,16 +182,8 @@ def calc_accuracy_test(logdir=None, dataset_expansion=None, dnn_model=None, para
   # Go through the dataset n_iters times
   for _ in tqdm(range(1)):
     for name_, model_ftrs_, labels_ in test_dataset:
-      # name = name_.numpy()[0].decode()
-      # assert name_.shape[0] == 1
       model_ftrs = model_ftrs_[:, :, :, :-1]
       all_seq = model_ftrs_[:, :, :, -1].numpy()
-      # if name not in models.keys():
-        # print('Loading model', name_)
-        # models[name] = get_model_by_name(name)
-        # models[name]['pred'] = np.zeros((models[name]['vertices'].shape[0], params.n_classes))
-        # models[name]['pred_count'] = 1e-6 * np.ones((models[name]['vertices'].shape[0], )) # Initiated to a very small number to avoid devision by 0
-  
       sp = model_ftrs.shape
       ftrs = tf.reshape(model_ftrs, (-1, sp[-2], sp[-1]))
       predictions = dnn_model(ftrs, training=False).numpy()[:, skip:]
@@ -212,45 +193,18 @@ def calc_accuracy_test(logdir=None, dataset_expansion=None, dnn_model=None, para
         models[model_name]['pred'][all_seq[w_step]] += predictions4vertex[w_step]
         models[model_name]['pred_count'][all_seq[w_step]] += 1
 
-
   postprocess_vertex_predictions(models)
-  print(3)
-  e_acc_after_postproc, v_acc_after_postproc, f_acc_after_postproc,segmentation_predict = calc_final_accuracy(models)
+  segmentation_predict = calc_final_accuracy(models)
+  return segmentation_predict
 
-  return [e_acc_after_postproc, e_acc_after_postproc], dnn_model,segmentation_predict
-
-
-# if __name__ == '__main__':
-#   from train_val import get_params
-#   utils.config_gpu(1)
-#   np.random.seed(0)
-#   tf.random.set_seed(0)
-
-#   if len(sys.argv) != 4:
-#     print('<>'.join(sys.argv))
-#     print('Use: python evaluate_segmentation.py <job> <part> <trained model directory>')
-#     print('For example: python evaluate_segmentation.py coseg chairs pretrained/0009-14.11.2020..07.08__coseg_chairs')
-#   else:
-#     logdir = sys.argv[3]
-#     job = sys.argv[1]
-#     job_part = sys.argv[2]
-#     params = get_params(job, job_part)
-#     dataset_expansion = params.datasets2use['test'][0]
-#     accs, _ = calc_accuracy_test(logdir, dataset_expansion)
-#     print('Edge accuracy:', accs[0])
-
-
+# this function is for converting file sent by the user to npz file
 def convert_obj_to_npz(obj_file, npz_file):
     # Load the OBJ file
     mesh = trimesh.load_mesh(obj_file)
     print(mesh)
-
-    # print(np.load('datasets_processed/human_seg_from_meshcnn/test_shrec__2_not_changed_1500.npz')['labels'])
-
     # Extract vertices, faces, and other attributes from the mesh
     vertices = mesh.vertices
     faces = mesh.faces
-
     # Create a dictionary to store the data
     data = {
         'vertices': vertices,
@@ -289,13 +243,11 @@ def convert_obj_to_npz(obj_file, npz_file):
               4, 4, 4, 4, 4, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 2, 3, 2, 2, 2, 2,
               2, 2, 2, 2, 2, 2, 2, 2])
     }
-
-
     # Save the data as an NPZ file
     np.savez(npz_file, **data)
 
 
-def main(job, job_part, logdir,file_obj):
+def start_predictions(job, job_part, logdir,file_obj):
   from train_val import get_params
   utils.config_gpu(1)
   np.random.seed(0)
@@ -303,8 +255,6 @@ def main(job, job_part, logdir,file_obj):
   params = get_params(job, job_part)
   dataset_expansion = params.datasets2use['test'][0]
   npz_file = "datasets_raw/from_meshcnn/human_seg/npz/"+file_obj.split("/")[-1].split(".")[0]+".npz"
-  print(npz_file)
   convert_obj_to_npz(file_obj, npz_file)
-  accs, _,segements = calc_accuracy_test(logdir,dataset_expansion=dataset_expansion, file_path=npz_file)
-  print('Edge accuracy:', accs[0])
+  segements = calc_accuracy_test(logdir,dataset_expansion=dataset_expansion, file_path=npz_file)
   return segements

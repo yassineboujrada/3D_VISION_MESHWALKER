@@ -14,13 +14,17 @@ function Home() {
     pauseOnHover: true,
     draggable: true,
     theme: "dark",
-};
+  };
+
+  // to set the file to be uploaded
   const [file, setFile] = useState(null);
   const navigate = useNavigate();
   const handleFileChange = (event) => {
     setFile(event.target.files[0]);
   };
 
+
+  // send file to backend for prediction and navigate to next page (/home/fileUploaded)
   const handleSubmit = async (event) => {
     event.preventDefault();
     var formData = new FormData();

@@ -182,8 +182,6 @@ def coseg_params(type): # aliens / chairs / vases
 
   params.full_accuracy_test = {'dataset_expansion': params.datasets2use['test'][0],
                                'n_iters': 32}
-
-
   return params
 
 
