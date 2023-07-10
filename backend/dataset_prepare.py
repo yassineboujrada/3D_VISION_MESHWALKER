@@ -236,8 +236,6 @@ def prepare_directory(dataset_name, pathname_expansion=None, p_out=None, n_targe
         fn2labels_map = add_labels
       else:
         fn2labels_map = None
-
-      print("\n\n\n wahya ",file,"\n\nnames ",filenames)
       label, labels_orig, v_labels_fuzzy = get_labels(dataset_name, mesh_data, file, fn2labels_map=fn2labels_map)
     else:
       label = np.zeros((0, ))
