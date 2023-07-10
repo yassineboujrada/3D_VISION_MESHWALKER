@@ -15,3 +15,13 @@ pyvista
 pydot
 graphviz
 opencv-python
+gunicorn==20.1.0
+Flask
+Flask-Cors
+setuptools==60.2.0
+y-py==0.6.0
+pyngrok
+flask_cors
+pymongo
+python-dotenv
+bcrypt

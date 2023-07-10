@@ -34,6 +34,7 @@ function Home() {
       return;
     }
     try {
+      console.log(formData)
       var response = await axios.post(homeRoute, formData, {
         headers: {
           'Content-Type': 'multipart/form-data'

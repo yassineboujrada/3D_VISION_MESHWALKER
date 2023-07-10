@@ -1,0 +1,239 @@
+info:
+  _postman_id: b2d2b06d-e303-4c24-a259-e6165a015500
+  name: Login
+  description: >-
+    # About this collection
+
+
+    This collection helps you set up contract tests to ensure that Login going
+    well
+
+
+    ## **Using the collection**
+
+
+    **Step 1:** Send the sample requests and view the response and test results.
+
+
+    **Step 2:** Replace the sample request URLs with your desired API endpoints.
+
+
+    [  
+
+    ](https://postman.postman.co/documentation/24552533-5bead607-0197-4e1d-87d4-3160bc7631c1?entity=&branch=&version=)
+  schema: https://schema.getpostman.com/json/collection/v2.1.0/collection.json
+  _exporter_id: '20812439'
+  _collection_link: >-
+    https://cloudy-comet-282133.postman.co/workspace/3D_Vision_MeshWalker~b1469632-1a6e-48d2-a14a-d5c5c3d35322/collection/20812439-b2d2b06d-e303-4c24-a259-e6165a015500?action=share&creator=20812439&source=collection_link
+item:
+  - name: backend side
+    item:
+      - name: Test Response
+        event:
+          - listen: test
+            script:
+              exec:
+                - // Validate that the response code should be 200
+                - pm.test("Status code is 200", function () {
+                - '    pm.response.to.have.status(200);'
+                - '});'
+                - ''
+                - // Validate that the response is json object
+                - pm.test("Response is a json object", function () {
+                - '    pm.expect(pm.response.json()).to.be.an(''object'');'
+                - '});'
+                - ''
+                - // Validate that the response has an arg object
+                - pm.test("Response to have 'arg' object", function () {
+                - '    pm.expect(pm.response.json()).to.have.property(''args'');'
+                - '});'
+                - ''
+                - // Validate that the response has headers object
+                - pm.test("Response to have 'headers' object", function () {
+                - '    pm.expect(pm.response.json()).to.have.property(''headers'');'
+                - '});'
+                - ''
+                - // Validate that the response has url property
+                - pm.test("Response to have 'url' property", function () {
+                - '    pm.expect(pm.response.json()).to.have.property(''url'');'
+                - '});'
+                - ''
+              type: text/javascript
+        request:
+          method: GET
+          header: []
+          url:
+            raw: >-
+              https://localhost:5000/api/auth/login?email=test@gmail.com&password=test
+            protocol: https
+            host:
+              - localhost
+            port: '5000'
+            path:
+              - api
+              - auth
+              - login
+            query:
+              - key: email
+                value: test@gmail.com
+              - key: password
+                value: test
+          description: |-
+            The tests in this request validate that:
+
+            - the response code is 200
+            - the response is a JSON object
+            - the response has an 'arg' object
+            - the response has 'headers' object
+            - the response has a 'URL' property
+        response: []
+      - name: JWT_Auth Querry
+        request:
+          method: POST
+          header: []
+          body:
+            mode: raw
+            raw: "{\r\n    \"status\":200,\r\n    \"data\":{\"email\":\"test@gmail.com\"},\r\n    \"token\":\"JwTiJ5up3salD8eL0w9\"\r\n}"
+            options:
+              raw:
+                language: json
+          url:
+            raw: https://localhost:3000/api/auth/login
+            protocol: https
+            host:
+              - localhost
+            port: '3000'
+            path:
+              - api
+              - auth
+              - login
+        response: []
+    auth:
+      type: basic
+    event:
+      - listen: prerequest
+        script:
+          type: text/javascript
+          exec:
+            - ''
+      - listen: test
+        script:
+          type: text/javascript
+          exec:
+            - ''
+  - name: Frontend side
+    item:
+      - name: Test Login Response
+        request:
+          method: POST
+          header: []
+          body:
+            mode: raw
+            raw: "{\r\n    \"email\": \"admin@gmail.com\",\r\n    \"password\":\"123456\"\r\n}"
+            options:
+              raw:
+                language: json
+          url:
+            raw: https://localhost:5000/api/auth/login
+            protocol: https
+            host:
+              - localhost
+            port: '5000'
+            path:
+              - api
+              - auth
+              - login
+        response:
+          - name: Success Login
+            originalRequest:
+              method: POST
+              header: []
+              body:
+                mode: raw
+                raw: "{\r\n    \"email\": \"admin@gmail.com\",\r\n    \"password\":\"12345\"\r\n}"
+                options:
+                  raw:
+                    language: json
+              url:
+                raw: https://localhost:5000/api/auth/login
+                protocol: https
+                host:
+                  - localhost
+                port: '5000'
+                path:
+                  - api
+                  - auth
+                  - login
+            status: OK
+            code: 200
+            _postman_previewlanguage: json
+            header:
+              - key: Access-Control-Allow-Origin
+                value: '*'
+              - key: Content-Length
+                value: '124'
+              - key: Content-Type
+                value: application/json
+              - key: Date
+                value: Mon, 03 Jul 2023 20:48:19 GMT
+              - key: Ngrok-Trace-Id
+                value: 79f44c49c1274da1f699c367578d3089
+              - key: Server
+                value: Werkzeug/2.2.3 Python/3.10.12
+              - key: Set-Cookie
+                value: >-
+                  session=eyJlbWFpbCI6ImFkbWluQGdtYWlsLmNvbSJ9.ZKM0Ew.hMfNGd0hB6qudUxGh837RZy03v8;
+                  HttpOnly; Path=/
+              - key: Vary
+                value: Cookie
+            cookie: []
+            body: |-
+              {
+                  "data": "admin@gmail.com",
+                  "status": 200,
+                  "token": "$2b$15$HU8TtSeUJjid02dIePMx2uS/8oYJcos/Isz8P1LQglnDxrH1Zvhum"
+              }
+          - name: Bad Request
+            originalRequest:
+              method: POST
+              header: []
+              body:
+                mode: raw
+                raw: "{\r\n    \"email\": \"admin@gmail.com\",\r\n    \"password\":\"123456\"\r\n}"
+                options:
+                  raw:
+                    language: json
+              url:
+                raw: https://localhost:5000/api/auth/login
+                protocol: https
+                host:
+                  - localhost
+                port: '5000'
+                path:
+                  - api
+                  - auth
+                  - login
+            status: OK
+            code: 200
+            _postman_previewlanguage: json
+            header:
+              - key: Access-Control-Allow-Origin
+                value: '*'
+              - key: Content-Length
+                value: '20'
+              - key: Content-Type
+                value: application/json
+              - key: Date
+                value: Mon, 03 Jul 2023 21:00:50 GMT
+              - key: Ngrok-Trace-Id
+                value: 5abe1a1865be4136cbdc8d96217db5d4
+              - key: Server
+                value: Werkzeug/2.2.3 Python/3.10.12
+            cookie: []
+            body: |-
+              {
+                  "status": 500
+              }
+variable:
+  - key: baseUrl
+    value: https://postman-echo.com
