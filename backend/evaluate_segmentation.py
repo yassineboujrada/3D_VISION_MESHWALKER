@@ -1,10 +1,13 @@
-import os, copy, json
+import os, copy, json, sys
 from easydict import EasyDict
 from tqdm import tqdm
+
 import scipy
 import numpy as np
 import trimesh
+
 import tensorflow as tf
+
 import rnn_model
 import dataset
 import dataset_prepare
@@ -66,31 +69,19 @@ def calc_final_accuracy(models, print_details=False):
   # 2. Normalized accuracy is calculated using the edge length or vertex "area" (which is the mean faces area for each vertex).
   vertices_accuracy = []; vertices_norm_acc = []
   edges_accuracy = []; edges_norm_acc = []
-  segmentation = []
-  segmentation__ = {}
+  segmentation = {}
+  segmentation_ ={}
   for model_name, model in models.items():
     if model['labels'].size == 0:
       continue
     best_pred = np.argmax(model['pred'], axis=-1)
     model['v_pred'] = best_pred
     pred_score = scipy.special.softmax(model['pred'], axis=1)
-    g = 0
-    gn = 0
-    for fi, face in enumerate(model['faces']):
-      v0_pred = best_pred[face[0]]
-      v1_pred = best_pred[face[1]]
-      v2_pred = best_pred[face[2]]
-      prediction_per_vertice = [(face[0], v0_pred), (face[1], v1_pred), (face[2], v2_pred)]
-      all_predictions = [v0_pred, v1_pred, v2_pred]
-      if len(set(all_predictions)) == 3:
-          segmentation__[fi] = int(sorted(prediction_per_vertice, key = lambda x : pred_score[x[0], x[1]], reverse = True)[0][1])
-          segmentation.append(int(sorted(prediction_per_vertice, key = lambda x : pred_score[x[0], x[1]], reverse = True)[0][1]))
-      else:
-          segmentation__[fi] = int(sorted(all_predictions, key = lambda x : all_predictions.count(x), reverse = True)[0])
-          segmentation.append(int(sorted(all_predictions, key = lambda x : all_predictions.count(x), reverse = True)[0])) 
-            
-        
-    if 'edges_meshcnn' in model.keys():    
+      
+    # Calc edges accuracy
+    if 'edges_meshcnn' in model.keys(): # pred per edge
+      g = 0
+      gn = 0
       for ei, edge in enumerate(model['edges_meshcnn']):
         v0_pred = best_pred[edge[0]]
         v0_score = pred_score[edge[0], v0_pred]
@@ -98,10 +89,10 @@ def calc_final_accuracy(models, print_details=False):
         v1_score = pred_score[edge[1], v1_pred]
         if v0_score > v1_score:
           best = v0_pred - 1
-          segmentation[str(tuple(edge))] = int(v0_pred)
+          segmentation[tuple(edge)] = v0_pred
         else:
           best = v1_pred - 1
-          segmentation[str(tuple(edge))] = int(v1_pred)
+          segmentation[tuple(edge)] = v1_pred
         if best < model['seseg'].shape[1]:
           g  += (model['seseg'][ei, best] != 0)
           gn += (model['seseg'][ei, best] != 0) * model['edges_length'][ei]
@@ -110,21 +101,35 @@ def calc_final_accuracy(models, print_details=False):
       edges_accuracy.append(this_accuracy)
       edges_norm_acc.append(norm_accuracy)
 
+      for fi, face in enumerate(model['faces']):
+        v0_pred = best_pred[face[0]]
+        v1_pred = best_pred[face[1]]
+        v2_pred = best_pred[face[2]]
+        prediction_per_vertice = [(face[0], v0_pred), (face[1], v1_pred), (face[2], v2_pred)]
+        all_predictions = [v0_pred, v1_pred, v2_pred]
+        if len(set(all_predictions)) == 3:
+            segmentation_[fi] = int(sorted(prediction_per_vertice, key = lambda x : pred_score[x[0], x[1]], reverse = True)[0][1])
+        else:
+            segmentation_[fi] = int(sorted(all_predictions, key = lambda x : all_predictions.count(x), reverse = True)[0])
+
+
     # Calc vertices accuracy
     if 'area_vertices' not in model.keys():
       dataset_prepare.calc_mesh_area(model)
+    this_accuracy = (best_pred == model['labels']).sum() / model['labels'].shape[0]
+    norm_accuracy = np.sum((best_pred == model['labels']) * model['area_vertices']) / model['area_vertices'].sum()
+    vertices_accuracy.append(this_accuracy)
+    vertices_norm_acc.append(norm_accuracy)
 
-  # with open('segmentation.json', 'w+') as f:
-  #   json.dump(segmentation__, f, indent=4)
+  if len(edges_accuracy) == 0:
+    edges_accuracy = [0]
 
-  return segmentation__
+  return np.mean(edges_accuracy), np.mean(vertices_accuracy), np.nan, segmentation_
 
 
-# this function is used to postprocess the vertex predictions 
-# by averaging the vertices with their neighbors
 def postprocess_vertex_predictions(models):
   # Averaging vertices with thir neighbors, to get best prediction (eg.5 in the paper)
-  for _, model in models.items():
+  for model_name, model in models.items():
     pred_orig = model['pred'].copy()
     av_pred = np.zeros_like(pred_orig)
     for v in range(model['vertices'].shape[0]):
@@ -140,9 +145,8 @@ def postprocess_vertex_predictions(models):
     model['pred'] = av_pred
 
 
-# this function used to calculate the accuracy of the model on the test set
 def calc_accuracy_test(logdir=None, dataset_expansion=None, dnn_model=None, params=None,
-                       n_iters=32, model_fn=None, n_walks_per_model=32, data_augmentation={}, file_path=None):
+                       n_iters=32, model_fn=None, n_walks_per_model=32, data_augmentation={}):
   # Prepare parameters for the evaluation
   if params is None:
     with open(logdir + '/params.txt') as fp:
@@ -172,89 +176,47 @@ def calc_accuracy_test(logdir=None, dataset_expansion=None, dnn_model=None, para
   skip = int(params.seq_len * 0.5)
   models = {}
 
-  npz_path = file_path
-  model_name = os.path.basename(npz_path)
-  models[model_name] = get_model_by_name(npz_path)
-  models[model_name]['pred'] = np.zeros((models[model_name]['vertices'].shape[0], params.n_classes))
-  models[model_name]['pred_count'] = 1e-6 * np.ones((models[model_name]['vertices'].shape[0], ))
-
-
   # Go through the dataset n_iters times
-  for _ in tqdm(range(1)):
-    for name_, model_ftrs_, labels_ in test_dataset:
+  for name_, model_ftrs_, labels_ in test_dataset:
+      name = name_.numpy()[0].decode()
+      assert name_.shape[0] == 1
       model_ftrs = model_ftrs_[:, :, :, :-1]
       all_seq = model_ftrs_[:, :, :, -1].numpy()
+      if name not in models.keys():
+        models[name] = get_model_by_name(name)
+        models[name]['pred'] = np.zeros((models[name]['vertices'].shape[0], params.n_classes))
+        models[name]['pred_count'] = 1e-6 * np.ones((models[name]['vertices'].shape[0], )) # Initiated to a very small number to avoid devision by 0
+
       sp = model_ftrs.shape
       ftrs = tf.reshape(model_ftrs, (-1, sp[-2], sp[-1]))
       predictions = dnn_model(ftrs, training=False).numpy()[:, skip:]
       all_seq = all_seq[0, :, skip + 1:].reshape(-1).astype(np.int32)
       predictions4vertex = predictions.reshape((-1, predictions.shape[-1]))
       for w_step in range(all_seq.size):
-        models[model_name]['pred'][all_seq[w_step]] += predictions4vertex[w_step]
-        models[model_name]['pred_count'][all_seq[w_step]] += 1
+        models[name]['pred'][all_seq[w_step]] += predictions4vertex[w_step]
+        models[name]['pred_count'][all_seq[w_step]] += 1
 
   postprocess_vertex_predictions(models)
-  segmentation_predict = calc_final_accuracy(models)
-  return segmentation_predict
+  e_acc_after_postproc, v_acc_after_postproc, f_acc_after_postproc, segmentation = calc_final_accuracy(models)
 
-# this function is for converting file sent by the user to npz file
-def convert_obj_to_npz(obj_file, npz_file):
-    # Load the OBJ file
-    mesh = trimesh.load_mesh(obj_file)
-    print(mesh)
-    # Extract vertices, faces, and other attributes from the mesh
-    vertices = mesh.vertices
-    faces = mesh.faces
-    # Create a dictionary to store the data
-    data = {
-        'vertices': vertices,
-        'faces': faces,
-        'edges': mesh.edges,
-        'labels': np.array([8, 8, 2, 8, 1, 2, 2, 2, 8, 5, 8, 8, 2, 1, 8, 8, 1, 1, 2, 5, 5, 1, 8, 5,
-              2, 3, 1, 8, 8, 1, 8, 6, 5, 2, 8, 5, 8, 5, 8, 5, 5, 8, 8, 5, 1, 1, 8, 8,
-              8, 5, 1, 1, 5, 1, 6, 5, 2, 3, 5, 4, 8, 8, 5, 5, 6, 5, 3, 3, 3, 3, 5, 5,
-              8, 8, 6, 6, 6, 2, 5, 5, 5, 5, 4, 4, 1, 8, 1, 6, 3, 2, 6, 5, 5, 4, 8, 8,
-              8, 4, 1, 6, 8, 4, 6, 5, 2, 5, 3, 5, 4, 1, 1, 8, 8, 8, 8, 8, 1, 6, 6, 6,
-              6, 2, 2, 6, 2, 5, 5, 3, 4, 4, 5, 1, 5, 5, 6, 3, 5, 3, 3, 5, 4, 1, 8, 1,
-              1, 8, 6, 2, 3, 4, 4, 5, 1, 1, 1, 8, 8, 8, 8, 4, 6, 6, 1, 8, 6, 6, 6, 3,
-              2, 5, 5, 3, 4, 4, 4, 5, 1, 1, 8, 7, 5, 6, 4, 6, 5, 6, 2, 3, 6, 2, 5, 4,
-              5, 4, 1, 1, 1, 8, 8, 8, 5, 8, 8, 3, 2, 8, 7, 7, 7, 7, 6, 6, 8, 6, 2, 2,
-              5, 2, 3, 5, 3, 4, 4, 4, 4, 8, 3, 8, 7, 7, 5, 5, 7, 6, 6, 2, 3, 5, 3, 5,
-              4, 3, 4, 4, 4, 4, 4, 8, 8, 7, 7, 6, 7, 5, 6, 3, 2, 2, 5, 5, 5, 3, 5, 4,
-              5, 5, 5, 5, 1, 7, 4, 8, 5, 7, 8, 7, 7, 7, 7, 6, 6, 6, 3, 2, 5, 3, 3, 4,
-              4, 4, 4, 4, 4, 1, 2, 8, 8, 8, 8, 5, 5, 7, 7, 7, 5, 3, 4, 4, 4, 8, 8, 8,
-              8, 7, 7, 7, 5, 5, 6, 4, 6, 3, 5, 4, 4, 4, 8, 8, 8, 8, 3, 3, 7, 7, 7, 6,
-              5, 2, 2, 3, 3, 5, 5, 5, 5, 4, 4, 8, 8, 8, 7, 7, 4, 7, 7, 8, 6, 5, 5, 4,
-              4, 2, 8, 4, 7, 7, 7, 6, 8, 6, 4, 5, 2, 8, 4, 7, 8, 8, 5, 5, 5, 6, 5, 5,
-              5, 5, 3, 4, 4, 4, 8, 7, 7, 7, 5, 5, 8, 5, 5, 8, 8, 8, 4, 7, 8, 5, 7, 6,
-              7, 5, 4, 4, 4, 4, 8, 8, 7, 7, 7, 5, 7, 6, 5, 4, 8, 8, 7, 7, 7, 6, 4, 7,
-              7, 7, 7, 6, 6, 8, 7, 7, 7, 7, 6, 5, 5, 8, 7, 7, 6, 5, 4, 8, 8, 7, 6, 6,
-              5, 5, 5, 7, 7, 6, 6, 6, 5, 5, 5, 7, 6, 6, 5, 7, 6, 5, 7, 6, 5, 5, 7, 6,
-              6, 5, 5, 5, 5, 7, 6, 6, 6, 5, 5, 5, 6, 6, 5, 5, 5, 5, 6, 6, 6, 6, 5, 5,
-              5, 5, 6, 6, 5, 5, 6, 5, 5, 1, 6, 5, 5, 5, 5, 1, 6, 5, 5, 1, 6, 6, 5, 5,
-              5, 1, 1, 1, 5, 5, 5, 5, 5, 1, 1, 1, 5, 5, 5, 5, 5, 1, 1, 5, 5, 5, 1, 1,
-              5, 5, 1, 5, 1, 5, 5, 5, 5, 5, 5, 5, 5, 1, 5, 5, 5, 5, 1, 1, 5, 5, 5, 5,
-              5, 1, 5, 1, 1, 6, 5, 5, 1, 1, 6, 6, 5, 5, 5, 6, 5, 5, 5, 5, 5, 1, 6, 5,
-              5, 5, 5, 7, 6, 5, 5, 5, 7, 6, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 6,
-              6, 6, 6, 5, 6, 6, 6, 5, 5, 5, 5, 5, 6, 5, 7, 7, 6, 6, 5, 5, 5, 5, 8, 7,
-              7, 6, 5, 5, 8, 8, 7, 7, 7, 6, 5, 5, 5, 5, 8, 7, 7, 7, 7, 7, 7, 6, 6, 6,
-              5, 8, 8, 7, 7, 6, 6, 6, 5, 5, 5, 5, 5, 5, 8, 4, 4, 8, 7, 7, 5, 5, 5, 4,
-              7, 5, 7, 7, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 3,
-              4, 4, 4, 4, 4, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 2, 3, 2, 2, 2, 2,
-              2, 2, 2, 2, 2, 2, 2, 2])
-    }
-    # Save the data as an NPZ file
-    np.savez(npz_file, **data)
+  return [e_acc_after_postproc, e_acc_after_postproc], dnn_model, segmentation
 
-
-def start_predictions(job, job_part, logdir,file_obj):
+def main(job, job_part, logdir):
   from train_val import get_params
   utils.config_gpu(1)
   np.random.seed(0)
   tf.random.set_seed(0)
+
+  '''if len(sys.argv) != 4:
+    print('<>'.join(sys.argv))
+    print('Use: python evaluate_segmentation.py <job> <part> <trained model directory>')
+    print('For example: python evaluate_segmentation.py coseg chairs pretrained/0009-14.11.2020..07.08__coseg_chairs')
+  else:
+    logdir = sys.argv[3]
+    job = sys.argv[1]'''
   params = get_params(job, job_part)
   dataset_expansion = params.datasets2use['test'][0]
-  npz_file = "datasets_raw/from_meshcnn/human_seg/npz/"+file_obj.split("/")[-1].split(".")[0]+".npz"
-  convert_obj_to_npz(file_obj, npz_file)
-  segements = calc_accuracy_test(logdir,dataset_expansion=dataset_expansion, file_path=npz_file)
-  return segements
+  accs, _, segmentation = calc_accuracy_test(logdir, dataset_expansion)
+    #print('Edge accuracy:', accs[0])
+  return segmentation
+
