@@ -62,9 +62,8 @@ $ python server.py
 The docs/ directory contains detailed documentation for the 3D_VISION with MESHWALKER Model. It includes the following files:
 
 - Postman Documenetation Link :
-```sh
-$ https://app.getpostman.com/join-team?invite_code=9ab7d963eb36ded32e526e8c1bd6b624&target_code=200d94896d58cef0271d11db82bcddf1
-```
+  
+  https://app.getpostman.com/join-team?invite_code=9ab7d963eb36ded32e526e8c1bd6b624&target_code=200d94896d58cef0271d11db82bcddf1
 
 - login.yaml : Describes the API and usage instructions for the login page.
 
@@ -76,7 +75,10 @@ $ https://app.getpostman.com/join-team?invite_code=9ab7d963eb36ded32e526e8c1bd6b
 
 - model_summary.png : Explains the architecture and layers of the model.
 
-Please refer to these files for more information on using and understanding the 3D_VISION with MESHWALKER Model, you can also access to this link for More Information 😉😉  https://drive.google.com/drive/u/0/folders/1q-xxoYM3oeOJFa5LCuqx8esN57Tazk3g
+Please refer to these files for more information on using and understanding the 3D_VISION with MESHWALKER Model, you can also access to this link for More Information 😉😉.
+
+Google Drive Link : 
+https://drive.google.com/drive/u/0/folders/1q-xxoYM3oeOJFa5LCuqx8esN57Tazk3g
 
 ## Contributing :
 
